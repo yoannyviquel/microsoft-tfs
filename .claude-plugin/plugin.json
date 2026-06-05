@@ -1,0 +1,30 @@
+{
+  "name": "microsoft-tfs",
+  "version": "1.40.0",
+  "description": "Microsoft TFS MCP server (Node/TypeScript stdio) — work items, builds, PRs, repos, branches.",
+  "mcpServers": "./.mcp.json",
+  "commands": "./commands/",
+  "userConfig": {
+    "token": {
+      "type": "string",
+      "title": "TFS Personal Access Token",
+      "description": "TFS PAT — exported as TFS_TOKEN into the stdio server environment",
+      "sensitive": true,
+      "required": true
+    },
+    "baseUrl": {
+      "type": "string",
+      "title": "TFS Base URL",
+      "description": "TFS root URL, without trailing slash — exported as TFS_BASE_URL. Example: http://tfs.example.com:8080/tfs",
+      "default": "http://tfs.example.com:8080/tfs",
+      "required": false
+    },
+    "org": {
+      "type": "string",
+      "title": "TFS Collection / Organization",
+      "description": "TFS collection — exported as TFS_ORG. Default: DefaultCollection",
+      "default": "DefaultCollection",
+      "required": false
+    }
+  }
+}

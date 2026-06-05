@@ -1,0 +1,31 @@
+{
+  "name": "microsoft-tfs",
+  "version": "1.40.0",
+  "description": "Microsoft TFS MCP server (Node/TypeScript, stdio).",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "microsoft-tfs-mcp": "dist/server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:tsc": "tsc -p tsconfig.json",
+    "dev": "tsx src/server.ts",
+    "smoke": "tsx src/scripts/smoke-test.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
