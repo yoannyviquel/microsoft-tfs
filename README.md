@@ -106,9 +106,20 @@ All names are prefixed with `tfs_` (e.g. `tfs_testconnection`).
 npm install
 npm run build         # produces dist/server.js (ESM bundle, shebang)
 npm run dev           # runs the server over stdio via tsx
+npm test              # offline E2E tests (fetch is mocked — deterministic, no TFS_TOKEN, no network)
 npm run smoke         # E2E smoke test against the real TFS (requires TFS_TOKEN)
-npm run typecheck
+npm run typecheck     # typecheck the source (src/)
+npm run typecheck:test # typecheck source + tests (test/)
 ```
+
+### E2E tests (offline)
+
+Tests under `test/` exercise the real path `args → handler → TfsClient → fetch → markdown`,
+replacing only `globalThis.fetch` with a route-driven fake (`test/helpers/fetch-mock.ts`).
+No network, no PAT: they run anywhere and in CI. Each tool has at least a happy-path case
+(plus an assertion on the URL/method actually called), an error case, and argument validation
+where relevant. `test/registry.test.ts` locks down the set of 39 exposed tools. To add a tool,
+update `EXPECTED_TOOLS` (a deliberate API change) and add its file to the `test` script in `package.json`.
 
 ## Architecture
 

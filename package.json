@@ -15,7 +15,9 @@
     "build:tsc": "tsc -p tsconfig.json",
     "dev": "tsx src/server.ts",
     "smoke": "tsx src/scripts/smoke-test.ts",
+    "test": "node --import tsx --test test/config.test.ts test/registry.test.ts test/connection.test.ts test/projects.test.ts test/work-items.test.ts test/repositories.test.ts test/builds.test.ts test/releases.test.ts test/pull-requests.test.ts test/branches.test.ts",
     "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
     "clean": "rimraf dist"
   },
   "dependencies": {
