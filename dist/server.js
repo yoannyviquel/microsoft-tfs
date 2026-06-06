@@ -7,6 +7,16 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
+import {
+  existsSync,
+  mkdirSync,
+  copyFileSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  unlinkSync
+} from "fs";
+import path from "path";
 
 // src/config.ts
 var DEFAULT_BASE_URL = "http://tfs.example.com:8080/tfs";
@@ -62,9 +72,9 @@ var TfsClient = class {
   get organization() {
     return this.cfg.organization;
   }
-  url(path, query) {
-    const sep = path.startsWith("/") ? "" : "/";
-    let url = `${this.cfg.baseUrl}/${this.cfg.organization}${sep}${path}`;
+  url(path2, query) {
+    const sep = path2.startsWith("/") ? "" : "/";
+    let url = `${this.cfg.baseUrl}/${this.cfg.organization}${sep}${path2}`;
     if (!query) return url;
     const parts = [];
     for (const [k, v] of Object.entries(query)) {
@@ -2358,9 +2368,9 @@ function repoPath(project, repositoryId, suffix) {
     `/_apis/git/repositories/${encodeURIComponent(repositoryId)}${suffix}`
   );
 }
-function normalizeRepoPath(path) {
-  if (path === void 0 || path === null) return "";
-  const trimmed = path.trim();
+function normalizeRepoPath(path2) {
+  if (path2 === void 0 || path2 === null) return "";
+  const trimmed = path2.trim();
   if (trimmed.length === 0) return "";
   let p = trimmed.replace(/\\/g, "/");
   if (!p.startsWith("/")) {
@@ -2391,8 +2401,8 @@ function* enumerateChangePaths(change) {
 }
 function findMatchingChangeForPath(changes, normalizedTarget) {
   for (const c of changes) {
-    for (const path of enumerateChangePaths(c)) {
-      if (pathsMatchForPrComment(path, normalizedTarget)) {
+    for (const path2 of enumerateChangePaths(c)) {
+      if (pathsMatchForPrComment(path2, normalizedTarget)) {
         return c;
       }
     }
@@ -3525,12 +3535,12 @@ var addPullRequestComment = {
             const samplePathsSet = /* @__PURE__ */ new Set();
             const samplePaths = [];
             for (const change of sampleChanges.slice(0, 40)) {
-              for (const path of enumerateChangePaths(change)) {
-                if (!path || path.trim().length === 0) continue;
-                const key = path.toLowerCase();
+              for (const path2 of enumerateChangePaths(change)) {
+                if (!path2 || path2.trim().length === 0) continue;
+                const key = path2.toLowerCase();
                 if (samplePathsSet.has(key)) continue;
                 samplePathsSet.add(key);
-                samplePaths.push(path);
+                samplePaths.push(path2);
                 if (samplePaths.length >= 15) break;
               }
               if (samplePaths.length >= 15) break;
@@ -4544,7 +4554,47 @@ var allTools = [
 // src/server.ts
 var PKG_VERSION = true ? "1.40.0" : "0.0.0-dev";
 console.log = (...args) => console.error("[stdout-redirected]", ...args);
+var PROCESS_NAME = "yoannyviquel_microsoft-tfs";
+function ensureNamedBinary(name) {
+  if (process.env.TFS_DISABLE_RENAME === "1") return;
+  if (process.platform !== "win32") return;
+  try {
+    const scriptPath = process.argv[1];
+    if (!scriptPath) return;
+    const root = path.resolve(path.dirname(scriptPath), "..");
+    const binDir = path.join(root, "bin");
+    const exe = path.join(binDir, `${name}.exe`);
+    if (path.basename(process.execPath).toLowerCase() === `${name}.exe`) return;
+    if (!existsSync(exe)) {
+      mkdirSync(binDir, { recursive: true });
+      copyFileSync(process.execPath, exe);
+    }
+    try {
+      const running = path.basename(process.execPath).toLowerCase();
+      for (const f of readdirSync(binDir)) {
+        const low = f.toLowerCase();
+        if (low.startsWith("yoannyviquel_microsoft-tfs") && low.endsWith(".exe") && low !== `${name}.exe` && low !== running) {
+          unlinkSync(path.join(binDir, f));
+        }
+      }
+    } catch {
+    }
+    const mcpPath = path.join(root, ".mcp.json");
+    const desired = "${CLAUDE_PLUGIN_ROOT}/bin/" + name + ".exe";
+    const mcp = JSON.parse(readFileSync(mcpPath, "utf8"));
+    if (mcp?.mcpServers?.tfs && mcp.mcpServers.tfs.command !== desired) {
+      mcp.mcpServers.tfs.command = desired;
+      writeFileSync(mcpPath, JSON.stringify(mcp, null, 2) + "\n");
+    }
+  } catch {
+  }
+}
 async function main() {
+  try {
+    process.title = PROCESS_NAME;
+  } catch {
+  }
+  ensureNamedBinary(PROCESS_NAME);
   const config = loadConfig();
   const client = new TfsClient(config);
   const ctx = { client };
