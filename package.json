@@ -1,6 +1,6 @@
 {
   "name": "microsoft-tfs",
-  "version": "1.40.0",
+  "version": "1.40.1",
   "description": "Microsoft TFS MCP server (Node/TypeScript, stdio).",
   "type": "module",
   "private": true,
