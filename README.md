@@ -7,7 +7,8 @@ Port of the original .NET TFS plugin.
 ## Prerequisites
 
 - Node.js >= 20
-- A TFS token (PAT) with access to the target projects
+- A TFS token (PAT) with access to the target projects.
+  Create one from your TFS user settings: `{baseUrl}/{DefaultCollection|Company}/_usersSettings/tokens`
 
 ## Installation
 
@@ -40,6 +41,7 @@ Do this **once** per machine. Claude Code then remembers the local marketplace.
 On install, Claude Code **prompts you directly** (via the plugin's `userConfig`) for:
 
 - **TFS Personal Access Token** (required, stored securely) → `TFS_TOKEN`
+  - Create the token from your TFS user settings: `{baseUrl}/{DefaultCollection|Company}/_usersSettings/tokens`
 - **TFS Base URL** (optional, default `http://tfs.example.com:8080/tfs`) → `TFS_BASE_URL`
 - **TFS Collection / Organization** (optional, default `DefaultCollection`) → `TFS_ORG`
 

@@ -8,7 +8,7 @@
     "token": {
       "type": "string",
       "title": "TFS Personal Access Token",
-      "description": "TFS PAT — exported as TFS_TOKEN into the stdio server environment",
+      "description": "TFS PAT — exported as TFS_TOKEN into the stdio server environment. Create one at {baseUrl}/{DefaultCollection|Company}/_usersSettings/tokens",
       "sensitive": true,
       "required": true
     },
