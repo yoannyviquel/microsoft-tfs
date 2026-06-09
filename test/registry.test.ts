@@ -36,6 +36,7 @@ const EXPECTED_TOOLS = [
   'tfs_approverelease',
   'tfs_abandonrelease',
   'tfs_createrelease',
+  'tfs_renamerelease',
   // pull requests
   'tfs_getpullrequests',
   'tfs_getpullrequest',

@@ -181,14 +181,20 @@ describe('tfs_createrelease', () => {
   beforeEach(installFetchMock);
   afterEach(restoreFetch);
 
-  it('POSTs a release with the explicit alias, build instanceReference and manualEnvironments', async () => {
+  /** Register the build lookup so instanceReference.name can be resolved. */
+  function routeBuild(id: number | string, buildNumber: string): void {
+    routeJson(`/_apis/build/builds/${id}`, { id, buildNumber }, 'GET');
+  }
+
+  it('wires instanceReference.name = buildNumber (so $(Build.BuildNumber) resolves)', async () => {
+    routeBuild(12345, '20260609.3');
     route({
       method: 'POST',
       match: '/_apis/release/releases',
       respond: {
         body: {
           id: 99,
-          name: 'Release-99',
+          name: '20260609.3-cdon_se 001',
           status: 'active',
           environments: [{ id: 1, name: 'recette', status: 'notDeployed' }],
           _links: { web: { href: 'http://tfs.test/web/release/99' } },
@@ -211,27 +217,58 @@ describe('tfs_createrelease', () => {
 
     assertOk(out);
     assert.match(out, /Release created successfully/);
-    assert.match(out, /Release-99/);
+    assert.match(out, /20260609\.3-cdon_se 001/);
     assert.match(out, /Prod_BDX, Prod_PAR/);
     assert.match(out, /http:\/\/tfs\.test\/web\/release\/99/);
+
+    // The build was fetched to obtain its number.
+    assert.ok(findCall('GET', '/_apis/build/builds/12345'), 'expected the build lookup');
 
     const call = findCall('POST', `${BASE}/Seller/_apis/release/releases`);
     assert.ok(call, 'expected the release POST');
     assert.match(call.url, /api-version=6\.0/);
-    // No definition GET when alias is explicit.
     assert.equal(findCall('GET', '/_apis/release/definitions/42'), undefined);
 
     const body = JSON.parse(call.body ?? '{}');
     assert.equal(body.definitionId, 42);
     assert.equal(body.isDraft, false);
     assert.deepEqual(body.artifacts, [
-      { alias: 'drop', instanceReference: { id: '12345' } },
+      { alias: 'drop', instanceReference: { id: '12345', name: '20260609.3' } },
     ]);
     assert.deepEqual(body.manualEnvironments, ['Prod_BDX', 'Prod_PAR']);
     assert.equal(body.description, 'hotfix branch');
+    // No PATCH when no explicit name is given.
+    assert.equal(findCall('PATCH', '/_apis/release/releases/99'), undefined);
+  });
+
+  it('renames the release via PATCH when an explicit name is provided', async () => {
+    routeBuild(777, 'BN-777');
+    route({
+      method: 'POST',
+      match: '/_apis/release/releases',
+      respond: { body: { id: 50, name: 'auto-name', status: 'active' } },
+    });
+    route({
+      method: 'PATCH',
+      match: '/_apis/release/releases/50',
+      respond: { body: { id: 50, name: 'My forced name', status: 'active' } },
+    });
+
+    const out = await runTool(
+      'tfs_createrelease',
+      { project: 'Seller', definitionId: 42, buildId: 777, artifactAlias: 'drop', name: 'My forced name' },
+      makeCtx()
+    );
+
+    assertOk(out);
+    assert.match(out, /My forced name/);
+    const patch = findCall('PATCH', `${BASE}/Seller/_apis/release/releases/50`);
+    assert.ok(patch, 'expected the rename PATCH');
+    assert.deepEqual(JSON.parse(patch.body ?? '{}'), { name: 'My forced name' });
   });
 
   it('resolves the artifact alias via GET definition (primary first) when omitted', async () => {
+    routeBuild('777', 'BN-777');
     routeJson('/_apis/release/definitions/42', {
       id: 42,
       artifacts: [
@@ -257,7 +294,7 @@ describe('tfs_createrelease', () => {
     assert.ok(call);
     const body = JSON.parse(call.body ?? '{}');
     assert.deepEqual(body.artifacts, [
-      { alias: 'primaryDrop', instanceReference: { id: '777' } },
+      { alias: 'primaryDrop', instanceReference: { id: '777', name: 'BN-777' } },
     ]);
     assert.equal(body.manualEnvironments, undefined);
   });
@@ -284,6 +321,7 @@ describe('tfs_createrelease', () => {
   });
 
   it('returns ❌ on HTTP error from the release POST', async () => {
+    routeBuild(1, 'BN-1');
     route({
       method: 'POST',
       match: '/_apis/release/releases',
@@ -295,6 +333,41 @@ describe('tfs_createrelease', () => {
       makeCtx()
     );
     assertError(out);
+  });
+});
+
+describe('tfs_renamerelease', () => {
+  beforeEach(installFetchMock);
+  afterEach(restoreFetch);
+
+  it('PATCHes the release name', async () => {
+    route({
+      method: 'PATCH',
+      match: '/_apis/release/releases/10',
+      respond: { body: { id: 10, name: 'Renamed', status: 'active' } },
+    });
+    const out = await runTool(
+      'tfs_renamerelease',
+      { project: 'Seller', releaseId: 10, name: 'Renamed' },
+      makeCtx()
+    );
+    assertOk(out);
+    assert.match(out, /renamed successfully/);
+    assert.match(out, /Renamed/);
+    const call = findCall('PATCH', `${BASE}/Seller/_apis/release/releases/10`);
+    assert.ok(call);
+    assert.match(call.url, /api-version=5\.1-preview\.8/);
+    assert.deepEqual(JSON.parse(call.body ?? '{}'), { name: 'Renamed' });
+  });
+
+  it('requires a new name', async () => {
+    const out = await runTool(
+      'tfs_renamerelease',
+      { project: 'Seller', releaseId: 10, name: '' },
+      makeCtx()
+    );
+    assertError(out);
+    assert.equal(findCall('PATCH', '/_apis/release/releases/10'), undefined);
   });
 });
 

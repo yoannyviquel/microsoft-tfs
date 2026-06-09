@@ -252,7 +252,14 @@ export interface TfsUpdateReleaseRequest {
 
 export interface TfsCreateReleaseArtifactMetadata {
   alias: string;
-  instanceReference: { id: string };
+  // instanceReference must carry the build NUMBER (name), not only the id,
+  // otherwise the release engine cannot resolve $(Build.BuildNumber) and the
+  // release name comes out empty (e.g. " - 001").
+  instanceReference: { id: string; name?: string };
+}
+
+export interface TfsUpdateReleaseNameRequest {
+  name: string;
 }
 
 export interface TfsCreateReleaseRequest {
