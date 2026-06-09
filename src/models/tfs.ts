@@ -157,6 +157,25 @@ export interface TfsReleaseDefinitionsResponse {
   value?: TfsReleaseDefinition[];
 }
 
+export interface TfsReleaseArtifact {
+  alias?: string;
+  type?: string;
+  isPrimary?: boolean;
+  isRetained?: boolean;
+}
+
+export interface TfsReleaseDefinitionEnvironmentRef {
+  id?: number;
+  name?: string;
+  rank?: number;
+}
+
+/** Detailed release definition (single fetch) — exposes artifacts and environments. */
+export interface TfsReleaseDefinitionDetail extends TfsReleaseDefinition {
+  artifacts?: TfsReleaseArtifact[];
+  environments?: TfsReleaseDefinitionEnvironmentRef[];
+}
+
 export interface TfsReleaseDefinitionRef {
   id?: number;
   name?: string;
@@ -192,6 +211,7 @@ export interface TfsRelease {
   modifiedBy?: TfsUser;
   releaseDefinition?: TfsReleaseDefinitionRef;
   environments?: TfsReleaseEnvironment[];
+  _links?: { web?: { href?: string }; self?: { href?: string } };
 }
 
 export interface TfsReleasesResponse {
@@ -228,6 +248,19 @@ export interface TfsUpdateReleaseEnvironmentRequest {
 export interface TfsUpdateReleaseRequest {
   status: string;
   comment?: string;
+}
+
+export interface TfsCreateReleaseArtifactMetadata {
+  alias: string;
+  instanceReference: { id: string };
+}
+
+export interface TfsCreateReleaseRequest {
+  definitionId: number;
+  description?: string;
+  isDraft?: boolean;
+  artifacts?: TfsCreateReleaseArtifactMetadata[];
+  manualEnvironments?: string[];
 }
 
 export interface TfsReleaseApproval {
