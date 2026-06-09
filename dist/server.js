@@ -4785,7 +4785,7 @@ var allTools = [
 ];
 
 // src/server.ts
-var PKG_VERSION = true ? "1.40.1" : "0.0.0-dev";
+var PKG_VERSION = true ? "1.41.0" : "0.0.0-dev";
 console.log = (...args) => console.error("[stdout-redirected]", ...args);
 var PROCESS_NAME = "yoannyviquel_microsoft-tfs";
 function ensureNamedBinary(name) {
