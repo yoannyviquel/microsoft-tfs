@@ -28,12 +28,14 @@ const EXPECTED_TOOLS = [
   'tfs_getbuilddefinitions',
   // releases
   'tfs_getreleasedefinitions',
+  'tfs_getreleasedefinition',
   'tfs_getreleases',
   'tfs_getdeployments',
   'tfs_deployrelease',
   'tfs_getreleaseapprovals',
   'tfs_approverelease',
   'tfs_abandonrelease',
+  'tfs_createrelease',
   // pull requests
   'tfs_getpullrequests',
   'tfs_getpullrequest',

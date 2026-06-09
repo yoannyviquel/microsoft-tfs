@@ -2342,14 +2342,247 @@ var abandonRelease = {
     }
   }
 };
+var getReleaseDefinition = {
+  name: "tfs_getreleasedefinition",
+  description: "Fetches the detail of a single Microsoft TFS release definition (deployment pipeline) by ID. Exposes its artifact aliases and environment names \u2014 useful to prepare a tfs_createrelease (which alias / which environments to set manual).",
+  inputSchema: {
+    type: "object",
+    properties: {
+      project: {
+        type: "string",
+        description: "The name of the Microsoft TFS project"
+      },
+      definitionId: {
+        type: "integer",
+        description: "The ID of the release definition"
+      }
+    },
+    required: ["project", "definitionId"],
+    additionalProperties: false
+  },
+  handler: async (args, { client }) => {
+    const project = typeof args.project === "string" ? args.project : "";
+    const definitionId = typeof args.definitionId === "number" ? args.definitionId : NaN;
+    try {
+      requireString4(project, "The project name");
+      if (!Number.isInteger(definitionId)) {
+        throw new Error("The release definition ID is required");
+      }
+      const url = client.url(
+        projectPath4(project, `/_apis/release/definitions/${definitionId}`),
+        { "api-version": "5.1-preview.3" }
+      );
+      const definition = await client.get(
+        url,
+        "fetching the release definition"
+      );
+      const lines = [];
+      lines.push(
+        `\u{1F680} **Release definition ${definition.name ?? definitionId} (ID ${definition.id ?? definitionId})**`
+      );
+      lines.push("");
+      if (definition.path && definition.path !== "\\") {
+        lines.push(`\u{1F4C2} **Path:** ${definition.path}`);
+      }
+      if (definition.releaseNameFormat) {
+        lines.push(`\u{1F3F7}\uFE0F **Format:** ${definition.releaseNameFormat}`);
+      }
+      const artifacts = definition.artifacts ?? [];
+      if (artifacts.length > 0) {
+        lines.push("");
+        lines.push(`\u{1F4E6} **Artifacts:**`);
+        for (const a of artifacts) {
+          const primary = a.isPrimary ? " (primary)" : "";
+          lines.push(`   \u2022 ${a.alias ?? "?"} [${a.type ?? "?"}]${primary}`);
+        }
+      }
+      const environments = definition.environments ?? [];
+      if (environments.length > 0) {
+        const ordered = [...environments].sort(
+          (a, b) => (a.rank ?? 0) - (b.rank ?? 0)
+        );
+        lines.push("");
+        lines.push(`\u{1F30D} **Environments:**`);
+        for (const e of ordered) {
+          lines.push(`   \u2022 ${e.name ?? "?"} (ID ${e.id ?? "?"})`);
+        }
+      }
+      if (definition.url) {
+        lines.push("");
+        lines.push(`\u{1F517} **Link:** ${definition.url}`);
+      }
+      lines.push("");
+      lines.push(
+        `\u{1F4A1} Create a release from a build with \`tfs_createrelease\` (definitionId ${definition.id ?? definitionId}).`
+      );
+      return lines.join("\n") + "\n";
+    } catch (err) {
+      return formatErrorResponse("fetching the release definition", err, {
+        Project: project,
+        "Definition ID": Number.isInteger(definitionId) ? definitionId : ""
+      });
+    }
+  }
+};
+var createRelease = {
+  name: "tfs_createrelease",
+  description: "Creates a release of a Microsoft TFS release definition (deployment pipeline) from a build, then leaves the configured environments to deploy. Use this when a branch build did not trigger the CD pipeline automatically (branch filter) so no release exists yet. Get the definitionId via tfs_getreleasedefinitions and the buildId via tfs_getbuilds. The build is wired as the release artifact (instanceReference.id).",
+  inputSchema: {
+    type: "object",
+    properties: {
+      project: {
+        type: "string",
+        description: "The name of the Microsoft TFS project"
+      },
+      definitionId: {
+        type: "integer",
+        description: "The ID of the release definition (pipeline) to create a release of"
+      },
+      buildId: {
+        type: ["integer", "string"],
+        description: "The build to use as the release artifact (its ID becomes artifacts[].instanceReference.id)"
+      },
+      artifactAlias: {
+        type: "string",
+        description: "Alias of the artifact to set the build on (optional). If omitted, it is resolved from the definition: the artifact with isPrimary === true, otherwise the first one."
+      },
+      description: {
+        type: "string",
+        description: "Release description / release notes (optional)"
+      },
+      isDraft: {
+        type: "boolean",
+        description: "Create the release as a draft (no automatic deployment). Default false."
+      },
+      manualEnvironments: {
+        type: "array",
+        items: { type: "string" },
+        description: 'Names of environments to NOT deploy automatically (set to manual), e.g. ["Prod_BDX","Prod_PAR"] (optional)'
+      }
+    },
+    required: ["project", "definitionId", "buildId"],
+    additionalProperties: false
+  },
+  handler: async (args, { client }) => {
+    const project = typeof args.project === "string" ? args.project : "";
+    const definitionId = typeof args.definitionId === "number" ? args.definitionId : NaN;
+    const buildId = typeof args.buildId === "number" ? String(args.buildId) : typeof args.buildId === "string" ? args.buildId : "";
+    let artifactAlias = typeof args.artifactAlias === "string" && args.artifactAlias.trim().length > 0 ? args.artifactAlias.trim() : void 0;
+    const description = typeof args.description === "string" ? args.description : void 0;
+    const isDraft = typeof args.isDraft === "boolean" ? args.isDraft : false;
+    const manualEnvironments = Array.isArray(args.manualEnvironments) ? args.manualEnvironments.filter(
+      (e) => typeof e === "string" && e.trim().length > 0
+    ) : [];
+    try {
+      requireString4(project, "The project name");
+      if (!Number.isInteger(definitionId)) {
+        throw new Error("The release definition ID is required");
+      }
+      if (!buildId || buildId.trim().length === 0) {
+        throw new Error("The build ID is required");
+      }
+      if (!artifactAlias) {
+        const defUrl = client.url(
+          projectPath4(project, `/_apis/release/definitions/${definitionId}`),
+          { "api-version": "5.1-preview.3" }
+        );
+        const definition = await client.get(
+          defUrl,
+          "resolving the artifact alias"
+        );
+        const artifacts = definition.artifacts ?? [];
+        if (artifacts.length === 0) {
+          throw new Error(
+            `Release definition ${definitionId} has no artifact \u2014 provide artifactAlias explicitly`
+          );
+        }
+        const chosen = artifacts.find((a) => a.isPrimary === true) ?? artifacts[0];
+        artifactAlias = chosen.alias;
+        if (!artifactAlias) {
+          throw new Error(
+            `Unable to resolve the artifact alias on definition ${definitionId} \u2014 provide artifactAlias explicitly`
+          );
+        }
+      }
+      const createRequest = {
+        definitionId,
+        isDraft,
+        artifacts: [
+          { alias: artifactAlias, instanceReference: { id: buildId } }
+        ]
+      };
+      if (description && description.trim()) {
+        createRequest.description = description;
+      }
+      if (manualEnvironments.length > 0) {
+        createRequest.manualEnvironments = manualEnvironments;
+      }
+      const url = client.url(projectPath4(project, "/_apis/release/releases"), {
+        "api-version": "6.0"
+      });
+      const release = await client.request(
+        "POST",
+        url,
+        createRequest,
+        { operationName: "creating the release" }
+      );
+      const webLink = release._links?.web?.href ?? release.url ?? "";
+      let result = `\u{1F680} **Release created successfully!**
+
+\u{1F4C1} **Project:** ${project}
+\u{1F194} **Release:** ${release.name ?? ""} (ID ${release.id ?? ""})
+\u{1F527} **Definition ID:** ${definitionId}
+\u{1F4E6} **Artifact:** ${artifactAlias} \u2192 build ${buildId}
+\u{1F4CA} **Status:** ${release.status ?? (isDraft ? "draft" : "")}
+`;
+      if (description && description.trim()) {
+        result += `\u{1F4DD} **Description:** ${description}
+`;
+      }
+      const environments = release.environments ?? [];
+      if (environments.length > 0) {
+        result += `\u{1F30D} **Environments:**
+`;
+        for (const env of environments) {
+          const deployStatus = env.deploymentStatus && env.deploymentStatus.length > 0 ? env.deploymentStatus : env.status ?? "";
+          const icon = environmentIcon(deployStatus);
+          result += `   ${icon} ${env.name ?? ""}: ${deployStatus}
+`;
+        }
+      }
+      if (manualEnvironments.length > 0) {
+        result += `\u270B **Manual (not auto-deployed):** ${manualEnvironments.join(", ")}
+`;
+      }
+      if (webLink) {
+        result += `\u{1F517} **Link:** ${webLink}
+`;
+      }
+      result += `
+\u{1F4A1} Deploy a manual stage with \`tfs_deployrelease\`, or track it with \`tfs_getreleases\`.`;
+      return result;
+    } catch (err) {
+      return formatErrorResponse("creating the release", err, {
+        Project: project,
+        "Definition ID": Number.isInteger(definitionId) ? definitionId : "",
+        "Build ID": buildId || "",
+        "Artifact alias": artifactAlias ?? "Auto (primary)",
+        Draft: isDraft,
+        "Manual environments": manualEnvironments.length > 0 ? manualEnvironments.join(", ") : "None"
+      });
+    }
+  }
+};
 var releaseTools = [
   getReleaseDefinitions,
+  getReleaseDefinition,
   getReleases,
   getDeployments,
   deployRelease,
   getReleaseApprovals,
   approveRelease,
-  abandonRelease
+  abandonRelease,
+  createRelease
 ];
 
 // src/tools/pull-requests.ts
