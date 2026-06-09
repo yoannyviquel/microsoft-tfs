@@ -1564,6 +1564,16 @@ function requireString4(value, displayName) {
 function projectPath4(project, suffix) {
   return `/${encodeURIComponent(project)}${suffix}`;
 }
+async function patchReleaseName(client, project, releaseId, name) {
+  const body = { name };
+  const url = client.url(
+    projectPath4(project, `/_apis/release/releases/${releaseId}`),
+    { "api-version": "5.1-preview.8" }
+  );
+  return client.request("PATCH", url, body, {
+    operationName: "renaming the release"
+  });
+}
 function environmentIcon(status) {
   switch (status.toLowerCase()) {
     case "succeeded":
@@ -2440,7 +2450,11 @@ var createRelease = {
       },
       buildId: {
         type: ["integer", "string"],
-        description: "The build to use as the release artifact (its ID becomes artifacts[].instanceReference.id)"
+        description: "The build to use as the release artifact. Its ID and build number are wired into artifacts[].instanceReference so the pipeline can resolve $(Build.BuildNumber) in the release name."
+      },
+      name: {
+        type: "string",
+        description: "Explicit release name (optional). If provided, the release is renamed via PATCH after creation. Otherwise the name resolves from the definition releaseNameFormat (e.g. $(Build.BuildNumber)-$(appTenant) $(Rev:rrr))."
       },
       artifactAlias: {
         type: "string",
@@ -2468,6 +2482,7 @@ var createRelease = {
     const definitionId = typeof args.definitionId === "number" ? args.definitionId : NaN;
     const buildId = typeof args.buildId === "number" ? String(args.buildId) : typeof args.buildId === "string" ? args.buildId : "";
     let artifactAlias = typeof args.artifactAlias === "string" && args.artifactAlias.trim().length > 0 ? args.artifactAlias.trim() : void 0;
+    const name = typeof args.name === "string" && args.name.trim().length > 0 ? args.name.trim() : void 0;
     const description = typeof args.description === "string" ? args.description : void 0;
     const isDraft = typeof args.isDraft === "boolean" ? args.isDraft : false;
     const manualEnvironments = Array.isArray(args.manualEnvironments) ? args.manualEnvironments.filter(
@@ -2504,12 +2519,23 @@ var createRelease = {
           );
         }
       }
+      const buildUrl = client.url(
+        projectPath4(project, `/_apis/build/builds/${encodeURIComponent(buildId)}`),
+        { "api-version": "6.0" }
+      );
+      const build = await client.get(
+        buildUrl,
+        "fetching the build number"
+      );
+      const buildNumber = typeof build.buildNumber === "string" && build.buildNumber.trim().length > 0 ? build.buildNumber : void 0;
+      const instanceReference = { id: buildId };
+      if (buildNumber) {
+        instanceReference.name = buildNumber;
+      }
       const createRequest = {
         definitionId,
         isDraft,
-        artifacts: [
-          { alias: artifactAlias, instanceReference: { id: buildId } }
-        ]
+        artifacts: [{ alias: artifactAlias, instanceReference }]
       };
       if (description && description.trim()) {
         createRequest.description = description;
@@ -2520,19 +2546,22 @@ var createRelease = {
       const url = client.url(projectPath4(project, "/_apis/release/releases"), {
         "api-version": "6.0"
       });
-      const release = await client.request(
+      let release = await client.request(
         "POST",
         url,
         createRequest,
         { operationName: "creating the release" }
       );
+      if (name && release.id !== void 0) {
+        release = await patchReleaseName(client, project, release.id, name);
+      }
       const webLink = release._links?.web?.href ?? release.url ?? "";
       let result = `\u{1F680} **Release created successfully!**
 
 \u{1F4C1} **Project:** ${project}
 \u{1F194} **Release:** ${release.name ?? ""} (ID ${release.id ?? ""})
 \u{1F527} **Definition ID:** ${definitionId}
-\u{1F4E6} **Artifact:** ${artifactAlias} \u2192 build ${buildId}
+\u{1F4E6} **Artifact:** ${artifactAlias} \u2192 build ${buildNumber ? `${buildNumber} (ID ${buildId})` : buildId}
 \u{1F4CA} **Status:** ${release.status ?? (isDraft ? "draft" : "")}
 `;
       if (description && description.trim()) {
@@ -2566,9 +2595,68 @@ var createRelease = {
         Project: project,
         "Definition ID": Number.isInteger(definitionId) ? definitionId : "",
         "Build ID": buildId || "",
+        Name: name ?? "Auto (releaseNameFormat)",
         "Artifact alias": artifactAlias ?? "Auto (primary)",
         Draft: isDraft,
         "Manual environments": manualEnvironments.length > 0 ? manualEnvironments.join(", ") : "None"
+      });
+    }
+  }
+};
+var renameRelease = {
+  name: "tfs_renamerelease",
+  description: "Renames an existing Microsoft TFS release (PATCH of its name). Useful when a release was created with an empty/wrong name (unresolved $(Build.BuildNumber)). Get the releaseId via tfs_getreleases.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      project: {
+        type: "string",
+        description: "The name of the Microsoft TFS project"
+      },
+      releaseId: {
+        type: "integer",
+        description: "The ID of the release to rename"
+      },
+      name: {
+        type: "string",
+        description: "The new release name"
+      }
+    },
+    required: ["project", "releaseId", "name"],
+    additionalProperties: false
+  },
+  handler: async (args, { client }) => {
+    const project = typeof args.project === "string" ? args.project : "";
+    const releaseId = typeof args.releaseId === "number" ? args.releaseId : NaN;
+    const name = typeof args.name === "string" ? args.name : "";
+    try {
+      requireString4(project, "The project name");
+      if (!Number.isInteger(releaseId)) {
+        throw new Error("The release ID is required");
+      }
+      requireString4(name, "The new release name");
+      const release = await patchReleaseName(client, project, releaseId, name);
+      const webLink = release._links?.web?.href ?? release.url ?? "";
+      let result = `\u270F\uFE0F **Release renamed successfully!**
+
+\u{1F4C1} **Project:** ${project}
+\u{1F194} **Release ID:** ${release.id ?? releaseId}
+\u{1F4CB} **Name:** ${release.name ?? name}
+`;
+      if (release.status) {
+        result += `\u{1F4CA} **Status:** ${release.status}
+`;
+      }
+      if (webLink) {
+        result += `\u{1F517} **Link:** ${webLink}
+`;
+      }
+      return result;
+    } catch (err) {
+      return formatErrorResponse("renaming the release", err, {
+        Project: project,
+        "Release ID": Number.isInteger(releaseId) ? releaseId : "",
+        Name: name || "None"
       });
     }
   }
@@ -2582,7 +2670,8 @@ var releaseTools = [
   getReleaseApprovals,
   approveRelease,
   abandonRelease,
-  createRelease
+  createRelease,
+  renameRelease
 ];
 
 // src/tools/pull-requests.ts
@@ -4785,7 +4874,7 @@ var allTools = [
 ];
 
 // src/server.ts
-var PKG_VERSION = true ? "1.41.0" : "0.0.0-dev";
+var PKG_VERSION = true ? "1.42.0" : "0.0.0-dev";
 console.log = (...args) => console.error("[stdout-redirected]", ...args);
 var PROCESS_NAME = "yoannyviquel_microsoft-tfs";
 function ensureNamedBinary(name) {

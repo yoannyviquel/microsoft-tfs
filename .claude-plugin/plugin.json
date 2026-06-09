@@ -1,6 +1,6 @@
 {
   "name": "microsoft-tfs",
-  "version": "1.41.0",
+  "version": "1.42.0",
   "description": "Microsoft TFS MCP server (Node/TypeScript stdio) — work items, builds, PRs, repos, branches.",
   "mcpServers": "./.mcp.json",
   "commands": "./commands/",

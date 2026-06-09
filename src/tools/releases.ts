@@ -1,5 +1,7 @@
 import type { ToolDefinition } from './types.js';
+import type { TfsClient } from '../tfs-client.js';
 import type {
+  TfsBuild,
   TfsCreateReleaseRequest,
   TfsRelease,
   TfsReleaseApproval,
@@ -13,6 +15,7 @@ import type {
   TfsReleasesResponse,
   TfsUpdateReleaseApprovalRequest,
   TfsUpdateReleaseEnvironmentRequest,
+  TfsUpdateReleaseNameRequest,
   TfsUpdateReleaseRequest,
 } from '../models/tfs.js';
 import { formatErrorResponse, formatDate } from '../formatting/markdown.js';
@@ -26,6 +29,26 @@ function requireString(value: unknown, displayName: string): string {
 
 function projectPath(project: string, suffix: string): string {
   return `/${encodeURIComponent(project)}${suffix}`;
+}
+
+/**
+ * PATCHes the name of an existing release. Shared by tfs_createrelease (when a
+ * `name` is given) and tfs_renamerelease.
+ */
+async function patchReleaseName(
+  client: TfsClient,
+  project: string,
+  releaseId: number,
+  name: string
+): Promise<TfsRelease> {
+  const body: TfsUpdateReleaseNameRequest = { name };
+  const url = client.url(
+    projectPath(project, `/_apis/release/releases/${releaseId}`),
+    { 'api-version': '5.1-preview.8' }
+  );
+  return client.request<TfsRelease>('PATCH', url, body, {
+    operationName: 'renaming the release',
+  });
 }
 
 function environmentIcon(status: string): string {
@@ -1037,7 +1060,12 @@ const createRelease: ToolDefinition = {
       buildId: {
         type: ['integer', 'string'],
         description:
-          'The build to use as the release artifact (its ID becomes artifacts[].instanceReference.id)',
+          'The build to use as the release artifact. Its ID and build number are wired into artifacts[].instanceReference so the pipeline can resolve $(Build.BuildNumber) in the release name.',
+      },
+      name: {
+        type: 'string',
+        description:
+          'Explicit release name (optional). If provided, the release is renamed via PATCH after creation. Otherwise the name resolves from the definition releaseNameFormat (e.g. $(Build.BuildNumber)-$(appTenant) $(Rev:rrr)).',
       },
       artifactAlias: {
         type: 'string',
@@ -1075,6 +1103,10 @@ const createRelease: ToolDefinition = {
     let artifactAlias =
       typeof args.artifactAlias === 'string' && args.artifactAlias.trim().length > 0
         ? args.artifactAlias.trim()
+        : undefined;
+    const name =
+      typeof args.name === 'string' && args.name.trim().length > 0
+        ? args.name.trim()
         : undefined;
     const description =
       typeof args.description === 'string' ? args.description : undefined;
@@ -1121,12 +1153,31 @@ const createRelease: ToolDefinition = {
         }
       }
 
+      // Fetch the build to obtain its build NUMBER. Without it the release
+      // engine cannot resolve $(Build.BuildNumber) and the release name comes
+      // out empty (e.g. " - 001").
+      const buildUrl = client.url(
+        projectPath(project, `/_apis/build/builds/${encodeURIComponent(buildId)}`),
+        { 'api-version': '6.0' }
+      );
+      const build = await client.get<TfsBuild>(
+        buildUrl,
+        'fetching the build number'
+      );
+      const buildNumber =
+        typeof build.buildNumber === 'string' && build.buildNumber.trim().length > 0
+          ? build.buildNumber
+          : undefined;
+
+      const instanceReference: { id: string; name?: string } = { id: buildId };
+      if (buildNumber) {
+        instanceReference.name = buildNumber;
+      }
+
       const createRequest: TfsCreateReleaseRequest = {
         definitionId,
         isDraft,
-        artifacts: [
-          { alias: artifactAlias, instanceReference: { id: buildId } },
-        ],
+        artifacts: [{ alias: artifactAlias, instanceReference }],
       };
       if (description && description.trim()) {
         createRequest.description = description;
@@ -1139,12 +1190,17 @@ const createRelease: ToolDefinition = {
         'api-version': '6.0',
       });
 
-      const release = await client.request<TfsRelease>(
+      let release = await client.request<TfsRelease>(
         'POST',
         url,
         createRequest,
         { operationName: 'creating the release' }
       );
+
+      // Force the name when explicitly requested (overrides releaseNameFormat).
+      if (name && release.id !== undefined) {
+        release = await patchReleaseName(client, project, release.id, name);
+      }
 
       const webLink = release._links?.web?.href ?? release.url ?? '';
 
@@ -1153,7 +1209,7 @@ const createRelease: ToolDefinition = {
         `📁 **Project:** ${project}\n` +
         `🆔 **Release:** ${release.name ?? ''} (ID ${release.id ?? ''})\n` +
         `🔧 **Definition ID:** ${definitionId}\n` +
-        `📦 **Artifact:** ${artifactAlias} → build ${buildId}\n` +
+        `📦 **Artifact:** ${artifactAlias} → build ${buildNumber ? `${buildNumber} (ID ${buildId})` : buildId}\n` +
         `📊 **Status:** ${release.status ?? (isDraft ? 'draft' : '')}\n`;
       if (description && description.trim()) {
         result += `📝 **Description:** ${description}\n`;
@@ -1185,10 +1241,72 @@ const createRelease: ToolDefinition = {
         Project: project,
         'Definition ID': Number.isInteger(definitionId) ? definitionId : '',
         'Build ID': buildId || '',
+        Name: name ?? 'Auto (releaseNameFormat)',
         'Artifact alias': artifactAlias ?? 'Auto (primary)',
         Draft: isDraft,
         'Manual environments':
           manualEnvironments.length > 0 ? manualEnvironments.join(', ') : 'None',
+      });
+    }
+  },
+};
+
+const renameRelease: ToolDefinition = {
+  name: 'tfs_renamerelease',
+  description:
+    'Renames an existing Microsoft TFS release (PATCH of its name). Useful when a release was created with an empty/wrong name (unresolved $(Build.BuildNumber)). Get the releaseId via tfs_getreleases.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      project: {
+        type: 'string',
+        description: 'The name of the Microsoft TFS project',
+      },
+      releaseId: {
+        type: 'integer',
+        description: 'The ID of the release to rename',
+      },
+      name: {
+        type: 'string',
+        description: 'The new release name',
+      },
+    },
+    required: ['project', 'releaseId', 'name'],
+    additionalProperties: false,
+  },
+  handler: async (args, { client }) => {
+    const project = typeof args.project === 'string' ? args.project : '';
+    const releaseId =
+      typeof args.releaseId === 'number' ? args.releaseId : NaN;
+    const name = typeof args.name === 'string' ? args.name : '';
+
+    try {
+      requireString(project, 'The project name');
+      if (!Number.isInteger(releaseId)) {
+        throw new Error('The release ID is required');
+      }
+      requireString(name, 'The new release name');
+
+      const release = await patchReleaseName(client, project, releaseId, name);
+
+      const webLink = release._links?.web?.href ?? release.url ?? '';
+      let result =
+        `✏️ **Release renamed successfully!**\n\n` +
+        `📁 **Project:** ${project}\n` +
+        `🆔 **Release ID:** ${release.id ?? releaseId}\n` +
+        `📋 **Name:** ${release.name ?? name}\n`;
+      if (release.status) {
+        result += `📊 **Status:** ${release.status}\n`;
+      }
+      if (webLink) {
+        result += `🔗 **Link:** ${webLink}\n`;
+      }
+      return result;
+    } catch (err) {
+      return formatErrorResponse('renaming the release', err, {
+        Project: project,
+        'Release ID': Number.isInteger(releaseId) ? releaseId : '',
+        Name: name || 'None',
       });
     }
   },
@@ -1204,4 +1322,5 @@ export const releaseTools: ToolDefinition[] = [
   approveRelease,
   abandonRelease,
   createRelease,
+  renameRelease,
 ];

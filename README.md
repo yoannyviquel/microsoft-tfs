@@ -82,7 +82,7 @@ git pull                                  # from claude-plugins/
 /exit                                     # restart Claude to relaunch the MCP stdio process
 ```
 
-## Available tools (41)
+## Available tools (42)
 
 **Connection (1)**: `testconnection`
 
@@ -94,7 +94,7 @@ git pull                                  # from claude-plugins/
 
 **Builds (4)**: `getbuilds`, `queuebuild`, `cancelbuild`, `getbuilddefinitions`
 
-**Releases (9)**: `getreleasedefinitions`, `getreleasedefinition`, `getreleases`, `getdeployments`, `deployrelease`, `getreleaseapprovals`, `approverelease`, `abandonrelease`, `createrelease`
+**Releases (10)**: `getreleasedefinitions`, `getreleasedefinition`, `getreleases`, `getdeployments`, `deployrelease`, `getreleaseapprovals`, `approverelease`, `abandonrelease`, `createrelease`, `renamerelease`
 
 **Pull Requests (15)**: `getpullrequests`, `getpullrequest`, `createpullrequest`, `updatepullrequest`, `abandonpullrequest`, `voteonpullrequest`, `completepullrequest`, `setautocompletepullrequest`, `markpullrequestdraft`, `publishpullrequest`, `getpullrequestcomments`, `addpullrequestcomment`, `resolvepullrequestcomment`, `getpullrequestdiff`, `getpullrequestiterations`
 
@@ -120,7 +120,7 @@ Tests under `test/` exercise the real path `args → handler → TfsClient → f
 replacing only `globalThis.fetch` with a route-driven fake (`test/helpers/fetch-mock.ts`).
 No network, no PAT: they run anywhere and in CI. Each tool has at least a happy-path case
 (plus an assertion on the URL/method actually called), an error case, and argument validation
-where relevant. `test/registry.test.ts` locks down the set of 41 exposed tools. To add a tool,
+where relevant. `test/registry.test.ts` locks down the set of 42 exposed tools. To add a tool,
 update `EXPECTED_TOOLS` (a deliberate API change) and add its file to the `test` script in `package.json`.
 
 ## Architecture
