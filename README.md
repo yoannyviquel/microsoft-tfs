@@ -1,108 +1,104 @@
-# microsoft-tfs
+<div align="center">
 
-Microsoft TFS MCP server for Claude Code — Node/TypeScript implementation over stdio.
+<img src="assets/banner.svg" alt="microsoft-tfs — Azure DevOps / TFS in Claude Code" width="100%">
 
-Port of the original .NET TFS plugin.
+### Full Azure DevOps / TFS, without leaving Claude Code.
 
-## Prerequisites
+A Node/TypeScript **MCP server** (stdio) that bridges Claude Code straight into on-premise Microsoft TFS — **work items, pull requests, builds, releases, repos and branches** — across **42 tools**. A port of the original .NET TFS plugin.
 
-- Node.js >= 20
-- A TFS token (PAT) with access to the target projects.
-  Create one from your TFS user settings: `{baseUrl}/{DefaultCollection|Company}/_usersSettings/tokens`
+[![version](https://img.shields.io/badge/version-1.42.0-0078d4?style=for-the-badge)](./.claude-plugin/plugin.json)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-MCP_server-0078d4?style=for-the-badge&logo=anthropic&logoColor=white)](https://docs.claude.com/en/docs/claude-code)
+[![Node](https://img.shields.io/badge/Node-%E2%89%A5_20-3c873a?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![tools](https://img.shields.io/badge/MCP_tools-42-0078d4?style=for-the-badge)](#-tools-42)
+[![License: MIT](https://img.shields.io/badge/License-MIT-6e7681?style=for-the-badge)](./LICENSE)
 
-## Installation
-
-### 1. Clone / update the `claude-plugins` repo
-
-```powershell
-git clone <your-claude-plugins-repo-url> claude-plugins
-# or if already cloned:
-cd claude-plugins
-git checkout master
-git pull
+```sh
+/plugin marketplace add yoannyviquel/marketplace
+/plugin install microsoft-tfs
 ```
 
-### 2. Register the marketplace in Claude Code
+</div>
 
-```
-/plugin marketplace add <path-to>\claude-plugins
-```
+---
 
-Do this **once** per machine. Claude Code then remembers the local marketplace.
+> Stop tabbing out to the web portal. Create a work item, open a PR, vote, queue a build, deploy a release — all from the prompt, with **Markdown-formatted output** (icons, timestamps, diffs) made to read well inside Claude.
 
-### 3. Install the plugin
+## ✨ Features
 
-```
-/plugin install microsoft-tfs@<marketplace-name>
-```
+| Domain | What you can do |
+|---|---|
+| 📋 **Work items** | Create, search (WIQL/JQL-style), read, update, comment, delete Bugs / Tasks / Stories / Features. |
+| 🔀 **Pull requests** | Create, update, vote, complete, abandon, auto-complete, draft/publish, threaded comments, diffs, iterations. |
+| 🏗️ **Builds** | List, queue, cancel builds; fetch build definitions. |
+| 🚀 **Releases** | Create, deploy, approve, abandon, rename; list definitions, releases and deployments. |
+| 📦 **Repos & branches** | List/search repositories; bulk-clean stale branches. |
+| 🔌 **Connection** | `testconnection` + `/microsoft-tfs:doctor` to verify the server and your PAT in one shot. |
 
-### 4. Configure the TFS token
+## 🔀 In action
 
-On install, Claude Code **prompts you directly** (via the plugin's `userConfig`) for:
+```text
+> tfs_getpullrequest(project="Offres", id=418443)
 
-- **TFS Personal Access Token** (required, stored securely) → `TFS_TOKEN`
-  - Create the token from your TFS user settings: `{baseUrl}/{DefaultCollection|Company}/_usersSettings/tokens`
-- **TFS Base URL** (optional, default `http://tfs.example.com:8080/tfs`) → `TFS_BASE_URL`
-- **TFS Collection / Organization** (optional, default `DefaultCollection`) → `TFS_ORG`
-
-These values are injected automatically into the stdio server environment via `${user_config.*}` — **no need to edit `settings.json`**.
-
-Authentication is done **by PAT only** (`TFS_TOKEN`).
-
-> To reconfigure afterwards: `/plugin` → microsoft-tfs → reconfigure.
-
-### 5. Reload the Claude Code config
-
-```
-/reload-plugins
+#418443 · Ceph → PureStorage migration  ✅ active
+  feature/pure-migration → master · 👤 yoann.yviquel
+  ✔ 2 approvals · 💬 3 threads (1 unresolved) · 🔧 build: succeeded
 ```
 
-### 6. **Restart Claude Code** (required on first install and after every update)
+<!-- TODO: replace the block above with a real screenshot/GIF of a tfs_* tool answer in Claude -->
+<!-- <p align="center"><img src="assets/demo.gif" alt="microsoft-tfs in action" width="800"></p> -->
 
+## 🚀 Install
+
+```text
+/plugin marketplace add yoannyviquel/marketplace
+/plugin install microsoft-tfs
 ```
-/exit
-```
 
-Then relaunch Claude Code. The MCP stdio process is spawned at startup — `/reload-plugins` does not restart it.
+On install, Claude Code **prompts you directly** (via the plugin's `userConfig`) for the connection — no `settings.json` editing:
 
-### 7. Verify
+| Prompt | Env | Required | Default |
+|---|---|---|---|
+| **TFS Personal Access Token** | `TFS_TOKEN` | ✅ (stored securely) | — |
+| **TFS Base URL** | `TFS_BASE_URL` | optional | `http://tfs.example.com:8080/tfs` |
+| **TFS Collection / Organization** | `TFS_ORG` | optional | `DefaultCollection` |
 
-```
+Create the PAT from your TFS user settings: `{baseUrl}/{DefaultCollection|Company}/_usersSettings/tokens`. Authentication is **by PAT only**.
+
+Then **restart Claude Code** (`/exit` and relaunch) — the MCP stdio process is spawned at startup, so `/reload-plugins` alone does not restart it. Finally verify:
+
+```text
 /microsoft-tfs:doctor
 ```
 
-Should show the loaded version and confirm the TFS connection.
+> **Reconfigure later:** `/plugin` → microsoft-tfs → reconfigure.
+> **Updates:** `/plugin` detects the new version → `/reload-plugins` → `/exit` and relaunch.
 
-### Later updates
-
-```
-git pull                                  # from claude-plugins/
-/plugin                                   # detects the new version
-/reload-plugins
-/exit                                     # restart Claude to relaunch the MCP stdio process
-```
-
-## Available tools (42)
-
-**Connection (1)**: `testconnection`
-
-**Projects (3)**: `getprojects`, `searchprojects`, `getproject`
-
-**Work items (6)**: `createworkitem`, `addcomment`, `searchworkitems`, `getworkitem`, `updateworkitem`, `deleteworkitem`
-
-**Repositories (2)**: `getrepositories`, `searchrepositories`
-
-**Builds (4)**: `getbuilds`, `queuebuild`, `cancelbuild`, `getbuilddefinitions`
-
-**Releases (10)**: `getreleasedefinitions`, `getreleasedefinition`, `getreleases`, `getdeployments`, `deployrelease`, `getreleaseapprovals`, `approverelease`, `abandonrelease`, `createrelease`, `renamerelease`
-
-**Pull Requests (15)**: `getpullrequests`, `getpullrequest`, `createpullrequest`, `updatepullrequest`, `abandonpullrequest`, `voteonpullrequest`, `completepullrequest`, `setautocompletepullrequest`, `markpullrequestdraft`, `publishpullrequest`, `getpullrequestcomments`, `addpullrequestcomment`, `resolvepullrequestcomment`, `getpullrequestdiff`, `getpullrequestiterations`
-
-**Branches (1)**: `cleanbranches`
+## 🧩 Tools (42)
 
 All names are prefixed with `tfs_` (e.g. `tfs_testconnection`).
 
-## Development
+<details>
+<summary><b>Browse the full tool list, by category</b></summary>
+
+**Connection (1)** — `testconnection`
+
+**Projects (3)** — `getprojects`, `searchprojects`, `getproject`
+
+**Work items (6)** — `createworkitem`, `addcomment`, `searchworkitems`, `getworkitem`, `updateworkitem`, `deleteworkitem`
+
+**Repositories (2)** — `getrepositories`, `searchrepositories`
+
+**Builds (4)** — `getbuilds`, `queuebuild`, `cancelbuild`, `getbuilddefinitions`
+
+**Releases (10)** — `getreleasedefinitions`, `getreleasedefinition`, `getreleases`, `getdeployments`, `deployrelease`, `getreleaseapprovals`, `approverelease`, `abandonrelease`, `createrelease`, `renamerelease`
+
+**Pull Requests (15)** — `getpullrequests`, `getpullrequest`, `createpullrequest`, `updatepullrequest`, `abandonpullrequest`, `voteonpullrequest`, `completepullrequest`, `setautocompletepullrequest`, `markpullrequestdraft`, `publishpullrequest`, `getpullrequestcomments`, `addpullrequestcomment`, `resolvepullrequestcomment`, `getpullrequestdiff`, `getpullrequestiterations`
+
+**Branches (1)** — `cleanbranches`
+
+</details>
+
+## 🛠️ Development
 
 ```bash
 npm install
@@ -114,15 +110,23 @@ npm run typecheck     # typecheck the source (src/)
 npm run typecheck:test # typecheck source + tests (test/)
 ```
 
+<details>
+<summary><b>E2E tests & architecture</b></summary>
+
 ### E2E tests (offline)
 
-Tests under `test/` exercise the real path `args → handler → TfsClient → fetch → markdown`,
-replacing only `globalThis.fetch` with a route-driven fake (`test/helpers/fetch-mock.ts`).
-No network, no PAT: they run anywhere and in CI. Each tool has at least a happy-path case
-(plus an assertion on the URL/method actually called), an error case, and argument validation
-where relevant. `test/registry.test.ts` locks down the set of 42 exposed tools. To add a tool,
-update `EXPECTED_TOOLS` (a deliberate API change) and add its file to the `test` script in `package.json`.
+Tests under `test/` exercise the real path `args → handler → TfsClient → fetch → markdown`, replacing only `globalThis.fetch` with a route-driven fake (`test/helpers/fetch-mock.ts`). No network, no PAT: they run anywhere and in CI. Each tool has at least a happy-path case (plus an assertion on the URL/method called), an error case, and argument validation where relevant. `test/registry.test.ts` locks down the set of 42 exposed tools. To add a tool, update `EXPECTED_TOOLS` (a deliberate API change) and add its file to the `test` script in `package.json`.
 
-## Architecture
+### Architecture
 
 See `src/server.ts` for the MCP bootstrap. Tools are registered via a flat `ToolDefinition[]` list aggregated in `src/tools/index.ts`.
+
+</details>
+
+---
+
+<div align="center">
+
+MIT © Yoann Yviquel · Part of the [**yoannyviquel** marketplace](https://github.com/yoannyviquel/marketplace)
+
+</div>
