@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 180" width="880" height="180" role="img" aria-label="microsoft-tfs — Azure DevOps / TFS inside Claude Code">
+  <defs>
+    <linearGradient id="acc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b9eff"/>
+      <stop offset="1" stop-color="#0078d4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#0078d4" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#0078d4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="1" y="1" width="878" height="178" rx="18" fill="#0d1117" stroke="#0078d4" stroke-opacity="0.45"/>
+  <circle cx="96" cy="90" r="78" fill="url(#glow)"/>
+  <!-- branch / pull-request motif -->
+  <g stroke="#0078d4" stroke-width="3" fill="none">
+    <line x1="74" y1="54" x2="74" y2="126"/>
+    <path d="M74 78 C74 104 122 96 122 122"/>
+  </g>
+  <g fill="url(#acc)">
+    <circle cx="74" cy="54" r="11"/>
+    <circle cx="74" cy="126" r="11"/>
+    <circle cx="122" cy="122" r="11"/>
+  </g>
+  <text x="190" y="82" font-family="ui-monospace,'SF Mono','JetBrains Mono','Fira Code',monospace" font-size="40" font-weight="700" fill="#f0f6fc">microsoft-tfs</text>
+  <rect x="192" y="98" width="180" height="5" rx="2.5" fill="url(#acc)"/>
+  <text x="192" y="130" font-family="ui-sans-serif,'Segoe UI',Helvetica,Arial,sans-serif" font-size="18" fill="#8b949e">Azure DevOps / TFS in Claude Code · work items · PRs · builds · releases</text>
+  <text x="836" y="40" text-anchor="end" font-family="ui-monospace,monospace" font-size="13" fill="#6e7681">42 MCP tools</text>
+</svg>
